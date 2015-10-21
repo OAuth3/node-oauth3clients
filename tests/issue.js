@@ -15,13 +15,7 @@ function dbsetup() {
   var wrap = require('dbwrap');
 
   var dir = [
-    { tablename: 'logins' // coolaj86, coolaj86@gmail.com, +1-317-426-6525
-    , idname: 'hashId'
-    //, relations: [{ tablename: 'secrets', id: 'hashid', fk: 'loginId' }]
-    , indices: ['createdAt', 'type', 'node']
-    //, immutable: false
-    }
-  , { tablename: 'api_keys'
+    { tablename: 'api_keys'
     , idname: 'id'
     , indices: ['createdAt', 'updatedAt', 'oauthClientId']
     , belongsTo: ['oauthClient'] // TODO pluralization
@@ -52,6 +46,36 @@ function dbsetup() {
     , idname: 'id'
     , indices: ['createdAt']
     }
+
+    //
+    // Specific to Logins Implementation, not OAuth3 stuff
+    //
+  , { tablename: 'codes'
+    , idname: 'uuid'
+    , indices: ['createdAt']
+    }
+  , { tablename: 'logins' // coolaj86, coolaj86@gmail.com, +1-317-426-6525
+    , idname: 'hashId'
+    //, relations: [{ tablename: 'secrets', id: 'hashid', fk: 'loginId' }]
+    , indices: ['createdAt', 'type', 'node']
+    //, immutable: false
+    }
+  , { tablename: 'verifications'
+    , idname: 'hashId' // hash(date + node)
+    //, relations: [{ tablename: 'secrets', id: 'hashid', fk: 'loginId' }]
+    , indices: ['createdAt', 'nodeId']
+    //, immutable: true
+    }
+  , { tablename: 'secrets'
+    , idname: 'hashId' // hash(node + secret)
+    , indices: ['createdAt']
+    //, immutable: true
+    }
+  , { tablename: 'recoveryNodes' // just for 1st-party logins
+    , idname: 'hashId' //
+      // TODO how transmit that something should be deleted / disabled?
+    , indices: ['createdAt', 'updatedAt', 'loginHash', 'recoveryNode', 'deleted']
+    }
   ];
 
   var promise = sqlite3.create({
@@ -68,7 +92,7 @@ function dbsetup() {
   });
 }
 
-function init(Kv, models, signer, OauthClients) {
+function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
   var tests;
   var count = 0;
   var apikey = null;
@@ -188,6 +212,14 @@ function init(Kv, models, signer, OauthClients) {
         throw err;
       });
     }
+  , function passUserLogin() {
+      // this is just a sanity check, it's already tested in its own tests
+      return LoginsCtrl.login({
+        node: user.node
+      , type: user.type
+      , secret: user.secret
+      });
+    }
   , function notImplemented() {
       throw new Error('Not Implemented');
     }
@@ -246,6 +278,15 @@ function init(Kv, models, signer, OauthClients) {
   });
 }
 
+/*
+            return initApi(config, LoginStore, Kv, Db, app);
+function initApi(config, LoginStore, Kv, Db, app) {
+  var loginsController = require('./lib/lds-logins').createController(config, LoginStore, Db, ContactNodes);
+        var cstore = require('cluster-store');
+        return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
+          return require('./new-db').create().then(function (DbNew) {
+*/
+
 module.exports.create = function () {
   var cstore = require('cluster-store');
   var Signer = require('../lib/sign-token');
@@ -255,13 +296,19 @@ module.exports.create = function () {
   return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
     return dbsetup().then(function (DB) {
       // TODO cluster.isMaster should init the signer
-      return Signer.create(DB.PrivateKey).init().then(function (signer) {
+      return require('./login-helper').create(config, DB).then(function (result) {
+        var LoginsCtrl = result.Logins;
+        var user = result;
+        console.log('user', user);
 
-        var oauthclients = OauthClients.createController({}, DB, signer);
-        return init(
-          PromiseA.promisifyAll(Kv), DB, signer, oauthclients
-          //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
-        );
+        return Signer.create(DB.PrivateKey).init().then(function (signer) {
+
+          var oauthclients = OauthClients.createController({}, DB, signer);
+          return init(
+            PromiseA.promisifyAll(Kv), DB, LoginsCtrl, signer, oauthclients, user
+            //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
+          );
+        });
       });
     });
   });
