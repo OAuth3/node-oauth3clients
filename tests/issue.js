@@ -24,6 +24,7 @@ function dbsetup() {
   , { tablename: 'api_keys'
     , idname: 'id'
     , indices: ['createdAt', 'updatedAt', 'oauthClientId']
+    , belongsTo: ['oauthClient'] // TODO pluralization
     , schema: function () {
         return {
           test: true
@@ -70,6 +71,7 @@ function dbsetup() {
 function init(Kv, models, signer, OauthClients) {
   var tests;
   var count = 0;
+  var apikey = null;
 
   function setup() {
     return PromiseA.resolve();
@@ -143,7 +145,47 @@ function init(Kv, models, signer, OauthClients) {
       };
 
       return OauthClients.create(null, account, client).then(function (client) {
-        console.log('client', client);
+        if (!client || !client.apikeys) {
+          return PromiseA.reject(new Error("did not create client with apikeys"));
+        }
+
+        client.apikeys.some(function (key) {
+          if (key.test && key.insecure) {
+            apikey = key;
+            return true;
+          }
+        });
+      });
+    }
+  , function passApiKeyLogin() {
+      //var AppLogin = require('../lib/auth-logic/oauthclients').createController(/*config*/null, Db);
+      return OauthClients.login(null, apikey.key).then(function (apikey) {
+        if (!apikey) {
+          throw new Error("missing api key");
+        }
+        if (!apikey.oauthClient) {
+          throw new Error("missing oauth client");
+        }
+      });
+    }
+  , function failApiKeyLogin() {
+      return OauthClients.login(null, apikey.key + '.').then(function (apikey) {
+        var err;
+
+        if (apikey) {
+          err = new Error("succeeded client login with invalid credentials");
+          err.code = 'E_FAIL';
+          return PromiseA.reject(err);
+        }
+      }, function (err) {
+        if ('E_INVALID_CLIENT_ID' === err.code) {
+          return null;
+        }
+
+        console.error('[failApiKeyLogin]');
+        console.error(err);
+        console.error(err.stack);
+        throw err;
       });
     }
   , function notImplemented() {
