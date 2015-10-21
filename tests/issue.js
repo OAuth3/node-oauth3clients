@@ -21,10 +21,31 @@ function dbsetup() {
     , indices: ['createdAt', 'type', 'node']
     //, immutable: false
     }
+  , { tablename: 'api_keys'
+    , idname: 'id'
+    , indices: ['createdAt', 'updatedAt', 'oauthClientId']
+    , schema: function () {
+        return {
+          test: true
+        , insecure: true
+        };
+      }
+    }
+  , { tablename: 'oauth_clients'
+    , idname: 'id'
+    , indices: ['createdAt', 'updatedAt']
+    , hasMany: ['apiKeys'] // TODO
+    , schema: function () {
+        return {
+          test: true
+        , insecure: true
+        };
+      }
+    }
   , { tablename: 'oauthorizations'
     , modelname: 'Authorizations'
-    , idname: 'hashId'
-    , indices: ['createdAt', 'nodeId']
+    , idname: 'id'
+    , indices: ['createdAt', 'updatedAt']
     }
   , { tablename: 'private_key'
     , idname: 'id'
@@ -46,7 +67,7 @@ function dbsetup() {
   });
 }
 
-function init(Kv, models, signer) {
+function init(Kv, models, signer, OauthClients) {
   var tests;
   var count = 0;
 
@@ -96,6 +117,33 @@ function init(Kv, models, signer) {
   , function passCreatePrivateKey() {
       return signer.loadKey().then(function (key) {
         console.log('pem private key', key);
+      });
+    }
+  , function passCreatePrivateKey() {
+      var account = {
+        id: 'root'
+      , iAmGroot: true
+      };
+      var client = {
+        name: 'My Foo App'
+      , desc: 'Upload foos and download corresponding bars!'
+      , urls: ['https://foobarconverteronline.com', 'https://barfooconverteronline.com']
+      , ips: [] // dynamic IPs??
+      , publicKey: null // ??
+      , logo: 'https://foobarconverteronline.com/images/logo-256px.png'
+      , live: false // won't show up on app store
+      , repo: 'git://github.com/coolaj86/foobarconverteronline'
+      , keywords: [ 'foo', 'bar', 'converter', 'online' ]
+      , insecure: true // do not produce server keys when true
+      , status: 'active' // I don't even remember
+      , test: true // also produce test keys
+      , primary_id: null // account?
+      , publishedAt: null // date gone live?
+      , testers: [] // ??? accounts? logins? what?
+      };
+
+      return OauthClients.create(null, account, client).then(function (client) {
+        console.log('client', client);
       });
     }
   , function notImplemented() {
@@ -159,15 +207,17 @@ function init(Kv, models, signer) {
 module.exports.create = function () {
   var cstore = require('cluster-store');
   var Signer = require('../lib/sign-token');
+  var OauthClients = require('../lib/oauthclients');
 
+  // TODO cluster.isMaster should init the session store
   return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
-    console.log('a');
     return dbsetup().then(function (DB) {
-      console.log('b');
+      // TODO cluster.isMaster should init the signer
       return Signer.create(DB.PrivateKey).init().then(function (signer) {
-        console.log('c');
+
+        var oauthclients = OauthClients.createController({}, DB, signer);
         return init(
-          PromiseA.promisifyAll(Kv), DB, signer//, require('../lib/tokens').create({}, DB)
+          PromiseA.promisifyAll(Kv), DB, signer, oauthclients
           //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
         );
       });
