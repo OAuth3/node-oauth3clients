@@ -15,16 +15,9 @@ function dbsetup() {
   var wrap = require('dbwrap');
 
   var dir = [
-    { tablename: 'api_keys'
+    { tablename: 'private_key'
     , idname: 'id'
-    , indices: ['createdAt', 'updatedAt', 'oauthClientId']
-    , belongsTo: ['oauthClient'] // TODO pluralization
-    , schema: function () {
-        return {
-          test: true
-        , insecure: true
-        };
-      }
+    , indices: ['createdAt']
     }
   , { tablename: 'oauth_clients'
     , idname: 'id'
@@ -37,14 +30,24 @@ function dbsetup() {
         };
       }
     }
-  , { tablename: 'oauthorizations'
-    , modelname: 'Authorizations'
+  , { tablename: 'api_keys'
     , idname: 'id'
-    , indices: ['createdAt', 'updatedAt']
+    , indices: ['createdAt', 'updatedAt', 'oauthClientId']
+    , belongsTo: ['oauthClient'] // TODO pluralization
+    , schema: function () {
+        return {
+          test: true
+        , insecure: true
+        };
+      }
     }
-  , { tablename: 'private_key'
+  , { tablename: 'tokens' // note that a token functions as a session
     , idname: 'id'
-    , indices: ['createdAt']
+    , indices: ['createdAt', 'updatedAt', 'expiresAt', 'oauthClientId', 'loginId', 'accountId']
+    }
+  , { tablename: 'grants'
+    , idname: 'id' // sha256(scope + oauthClientId + (accountId || loginId))
+    , indices: ['createdAt', 'updatedAt', 'oauthClientId', 'loginId', 'accountId']
     }
 
     //
