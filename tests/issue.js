@@ -12,92 +12,7 @@ try {
 
 var config = require('../config.test.js');
 
-function dbsetup() {
-  var sqlite3 = require('sqlite3-cluster');
-  var wrap = require('dbwrap');
-
-  var dir = [
-    { tablename: 'private_key'
-    , idname: 'id'
-    , indices: ['createdAt']
-    }
-  , { tablename: 'oauth_clients'
-    , idname: 'id'
-    , indices: ['createdAt', 'updatedAt']
-    , hasMany: ['apiKeys'] // TODO
-    , schema: function () {
-        return {
-          test: true
-        , insecure: true
-        };
-      }
-    }
-  , { tablename: 'api_keys'
-    , idname: 'id'
-    , indices: ['createdAt', 'updatedAt', 'oauthClientId']
-    , belongsTo: ['oauthClient'] // TODO pluralization
-    , schema: function () {
-        return {
-          test: true
-        , insecure: true
-        };
-      }
-    }
-  , { tablename: 'tokens' // note that a token functions as a session
-    , idname: 'id'
-    , indices: ['createdAt', 'updatedAt', 'expiresAt', 'revokedAt', 'oauthClientId', 'loginId', 'accountId']
-    }
-  , { tablename: 'grants'
-    , idname: 'id' // sha256(scope + oauthClientId + (accountId || loginId))
-    , indices: ['createdAt', 'updatedAt', 'oauthClientId', 'loginId', 'accountId']
-    }
-
-    //
-    // Specific to Logins Implementation, not OAuth3 stuff
-    //
-  , { tablename: 'codes'
-    , idname: 'uuid'
-    , indices: ['createdAt']
-    }
-  , { tablename: 'logins' // coolaj86, coolaj86@gmail.com, +1-317-426-6525
-    , idname: 'hashId'
-    //, relations: [{ tablename: 'secrets', id: 'hashid', fk: 'loginId' }]
-    , indices: ['createdAt', 'type', 'node']
-    //, immutable: false
-    }
-  , { tablename: 'verifications'
-    , idname: 'hashId' // hash(date + node)
-    //, relations: [{ tablename: 'secrets', id: 'hashid', fk: 'loginId' }]
-    , indices: ['createdAt', 'nodeId']
-    //, immutable: true
-    }
-  , { tablename: 'secrets'
-    , idname: 'hashId' // hash(node + secret)
-    , indices: ['createdAt']
-    //, immutable: true
-    }
-  , { tablename: 'recoveryNodes' // just for 1st-party logins
-    , idname: 'hashId' //
-      // TODO how transmit that something should be deleted / disabled?
-    , indices: ['createdAt', 'updatedAt', 'loginHash', 'recoveryNode', 'deleted']
-    }
-  ];
-
-  var promise = sqlite3.create({
-      standalone: true
-    , bits: 128
-    , filename: config.filename
-    , verbose: false
-  });
-
-  return promise.then(function (db) {
-    return db.init({ bits: 128, key: config.key });
-  }).then(function (db) {
-    return wrap.wrap(db, dir);
-  });
-}
-
-function init(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
+function run(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
   var tests;
   var count = 0;
   var apikey = null;
@@ -372,30 +287,9 @@ function initApi(config, LoginStore, Kv, Db, app) {
 */
 
 module.exports.create = function () {
-  var cstore = require('cluster-store');
-  var Signer = require('../lib/sign-token');
-  var OauthClients = require('../lib/oauthclients');
-  var Oauth3orize = require('../lib/oauth3orize');
-
-  // TODO cluster.isMaster should init the session store
-  return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
-    return dbsetup().then(function (DB) {
-      // TODO cluster.isMaster should init the signer
-      return require('./login-helper').create(config, DB).then(function (result) {
-        var LoginsCtrl = result.Logins;
-        var user = result;
-
-        return Signer.create(DB.PrivateKey).init().then(function (signer) {
-
-          var ClientsCtrl = OauthClients.createController({}, DB, signer);
-          var oauth3orize = Oauth3orize.create(config, DB.Tokens, ClientsCtrl, LoginsCtrl, signer);
-          return init(
-            PromiseA.promisifyAll(Kv), DB, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize
-            //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
-          );
-        });
-      });
-    });
+  return require('./setup-helper').create(config).then(function (stuff) {
+    return run(stuff.Kv, stuff.Db, stuff.LoginsCtrl, stuff.Signer, stuff.ClientsCtrl
+      , stuff.user, stuff.oauth3orize);
   });
 };
 
