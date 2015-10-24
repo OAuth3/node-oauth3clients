@@ -101,6 +101,7 @@ function init(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
   var tests;
   var count = 0;
   var apikey = null;
+  var parsedRequest;
 
   function setup() {
     return PromiseA.resolve();
@@ -234,14 +235,32 @@ function init(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
       });
     }
   , function getToken() {
+      parsedRequest = {
+        clientId: apikey.key
+      , clientSecret: undefined // 'anonymous'
+      , username: user.node
+      , usernameType: undefined // user.type
+      , password: user.secret
 
-      //module.exports.parseResourceOwnerPassword = parseResourceOwnerPassword;
-      //module.exports.exchangePasswordToken = exchangePasswordToken;
-      //module.exports.getClientAndUser = getClientAndUser;
+      , tenantId: undefined
+      , scope: []
+
+      , totp: undefined
+      , mfa: undefined
+
+      , origin: 'https://daplie.com'
+      , referer: 'https://daplie.com/connect/'
+      , userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) '
+                    + 'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    + 'Chrome/45.0.2454.101 Safari/537.36'
+      , ip: '127.0.0.1'
+      , secure: true
+      };
+
       return oauth3orize.parseResourceOwnerPassword({
         method: 'POST'
       , body: {
-          client_id: apikey.id
+          client_id: apikey.key
         , client_secret: undefined // apikey.secret
         , username: user.node
         , password: user.secret
@@ -260,27 +279,29 @@ function init(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
       , ip: '127.0.0.1'
       , protocol: 'https'
       , secure: true
-      }).then(function (result) {
-        assert.deepEqual(result, {
-          clientId: apikey.id
-        , clientSecret: undefined // 'anonymous'
-        , username: user.node
-        , password: user.secret
-
-        , tenantId: undefined
-        , scope: []
-
-        , totp: undefined
-        , mfa: undefined
-
-        , origin: 'https://daplie.com'
-        , referer: 'https://daplie.com/connect/'
-        , userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) '
-                      + 'AppleWebKit/537.36 (KHTML, like Gecko) '
-                      + 'Chrome/45.0.2454.101 Safari/537.36'
-        , ip: '127.0.0.1'
-        , secure: true
-        });
+      }).then(function (actual) {
+        assert.deepEqual(actual, parsedRequest);
+      });
+    }
+  , function passLoginWithClient() {
+      // adds 'apiKey' and 'login'
+      return oauth3orize.getClientAndUser(parsedRequest).then(function (result) {
+        if (!parsedRequest.apiKey || !result.apiKey) {
+          throw new Error("client was not retrieved");
+        }
+        if (!parsedRequest.login || !result.login) {
+          throw new Error("login was not retrieved");
+        }
+      });
+    }
+  , function passExchangePassword() {
+      return oauth3orize.exchangePasswordToken(parsedRequest).then(function (result) {
+        if (!result.accessToken) {
+          throw new Error("accessToken was not retrieved");
+        }
+        if (!result.refreshToken) {
+          throw new Error("refreshToken was not granted");
+        }
       });
     }
   , function notImplemented() {
@@ -367,7 +388,7 @@ module.exports.create = function () {
         return Signer.create(DB.PrivateKey).init().then(function (signer) {
 
           var ClientsCtrl = OauthClients.createController({}, DB, signer);
-          var oauth3orize = Oauth3orize.create(config, DB.tokens, ClientsCtrl, LoginsCtrl);
+          var oauth3orize = Oauth3orize.create(config, DB.Tokens, ClientsCtrl, LoginsCtrl, signer);
           return init(
             PromiseA.promisifyAll(Kv), DB, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize
             //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
