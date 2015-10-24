@@ -2,6 +2,8 @@
 
 /*global Promise*/
 var PromiseA = Promise;
+var assert = require('assert');
+
 try {
   PromiseA = require('bluebird').Promise;
 } catch (e) {
@@ -43,7 +45,7 @@ function dbsetup() {
     }
   , { tablename: 'tokens' // note that a token functions as a session
     , idname: 'id'
-    , indices: ['createdAt', 'updatedAt', 'expiresAt', 'oauthClientId', 'loginId', 'accountId']
+    , indices: ['createdAt', 'updatedAt', 'expiresAt', 'revokedAt', 'oauthClientId', 'loginId', 'accountId']
     }
   , { tablename: 'grants'
     , idname: 'id' // sha256(scope + oauthClientId + (accountId || loginId))
@@ -95,7 +97,7 @@ function dbsetup() {
   });
 }
 
-function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
+function init(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
   var tests;
   var count = 0;
   var apikey = null;
@@ -145,7 +147,15 @@ function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
     }
   , function passCreatePrivateKey() {
       return signer.loadKey().then(function (key) {
-        console.log('pem private key', key);
+        if (!key) {
+          throw new Error("fail create private key");
+        }
+        if (!key.toPrivatePem()) {
+          throw new Error("fail create private key pem");
+        }
+        if (!key.toPublicPem()) {
+          throw new Error("fail create public key pem");
+        }
       });
     }
   , function passCreatePrivateKey() {
@@ -171,7 +181,7 @@ function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
       , testers: [] // ??? accounts? logins? what?
       };
 
-      return OauthClients.create(null, account, client).then(function (client) {
+      return ClientsCtrl.create(null, account, client).then(function (client) {
         if (!client || !client.apikeys) {
           return PromiseA.reject(new Error("did not create client with apikeys"));
         }
@@ -186,7 +196,7 @@ function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
     }
   , function passApiKeyLogin() {
       //var AppLogin = require('../lib/auth-logic/oauthclients').createController(/*config*/null, Db);
-      return OauthClients.login(null, apikey.key).then(function (apikey) {
+      return ClientsCtrl.login(null, apikey.key).then(function (apikey) {
         if (!apikey) {
           throw new Error("missing api key");
         }
@@ -196,7 +206,7 @@ function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
       });
     }
   , function failApiKeyLogin() {
-      return OauthClients.login(null, apikey.key + '.').then(function (apikey) {
+      return ClientsCtrl.login(null, apikey.key + '.').then(function (apikey) {
         var err;
 
         if (apikey) {
@@ -221,6 +231,56 @@ function init(Kv, models, LoginsCtrl, signer, OauthClients, user) {
         node: user.node
       , type: user.type
       , secret: user.secret
+      });
+    }
+  , function getToken() {
+
+      //module.exports.parseResourceOwnerPassword = parseResourceOwnerPassword;
+      //module.exports.exchangePasswordToken = exchangePasswordToken;
+      //module.exports.getClientAndUser = getClientAndUser;
+      return oauth3orize.parseResourceOwnerPassword({
+        method: 'POST'
+      , body: {
+          client_id: apikey.id
+        , client_secret: undefined // apikey.secret
+        , username: user.node
+        , password: user.secret
+        , grant_type: 'password'
+        }
+
+      , headers: {
+          origin: 'https://daplie.com'
+        , referer: 'https://daplie.com/connect/'
+        , 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) '
+                        + 'AppleWebKit/537.36 (KHTML, like Gecko) '
+                        + 'Chrome/45.0.2454.101 Safari/537.36'
+        }
+      , socket: { encrypted: true, remoteAddress: '127.0.0.1' }
+
+      , ip: '127.0.0.1'
+      , protocol: 'https'
+      , secure: true
+      }).then(function (result) {
+        assert.deepEqual(result, {
+          clientId: apikey.id
+        , clientSecret: undefined // 'anonymous'
+        , username: user.node
+        , password: user.secret
+
+        , tenantId: undefined
+        , scope: []
+
+        , totp: undefined
+        , mfa: undefined
+
+        , origin: 'https://daplie.com'
+        , referer: 'https://daplie.com/connect/'
+        , userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) '
+                      + 'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      + 'Chrome/45.0.2454.101 Safari/537.36'
+        , ip: '127.0.0.1'
+        , secure: true
+        });
       });
     }
   , function notImplemented() {
@@ -294,6 +354,7 @@ module.exports.create = function () {
   var cstore = require('cluster-store');
   var Signer = require('../lib/sign-token');
   var OauthClients = require('../lib/oauthclients');
+  var Oauth3orize = require('../lib/oauth3orize');
 
   // TODO cluster.isMaster should init the session store
   return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
@@ -302,13 +363,13 @@ module.exports.create = function () {
       return require('./login-helper').create(config, DB).then(function (result) {
         var LoginsCtrl = result.Logins;
         var user = result;
-        console.log('user', user);
 
         return Signer.create(DB.PrivateKey).init().then(function (signer) {
 
-          var oauthclients = OauthClients.createController({}, DB, signer);
+          var ClientsCtrl = OauthClients.createController({}, DB, signer);
+          var oauth3orize = Oauth3orize.create(config, DB.tokens, ClientsCtrl, LoginsCtrl);
           return init(
-            PromiseA.promisifyAll(Kv), DB, LoginsCtrl, signer, oauthclients, user
+            PromiseA.promisifyAll(Kv), DB, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize
             //Kv, require('../lib/logins').create({}, require('authcodes').create(DB.Codes), DB)
           );
         });
