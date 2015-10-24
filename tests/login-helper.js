@@ -21,7 +21,6 @@ module.exports.create = function (config, DB) {
   // success because it's inherently recoverable
   salt = sha256(new Buffer(userId).toString('hex') + config.appId);
   return getProofOfSecret(salt, 'MY_SPECIAL_SECRET', kdfMeta.iter).then(function (proof) {
-    console.log('proof.proof', proof.proof, proof.proof.length);
     return LoginStore.create({
       node: userId
     , type: nodeType
