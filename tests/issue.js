@@ -1,14 +1,7 @@
 'use strict';
 
-/*global Promise*/
-var PromiseA = Promise;
+var PromiseA = require('bluebird').Promise;
 var assert = require('assert');
-
-try {
-  PromiseA = require('bluebird').Promise;
-} catch (e) {
-  // ignore
-}
 
 var config = require('../config.test.js');
 
@@ -98,11 +91,11 @@ function run(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
       };
 
       return ClientsCtrl.create(null, account, client).then(function (client) {
-        if (!client || !client.apikeys) {
-          return PromiseA.reject(new Error("did not create client with apikeys"));
+        if (!client || !client.apiKeys) {
+          return PromiseA.reject(new Error("did not create client with api keys"));
         }
 
-        client.apikeys.some(function (key) {
+        client.apiKeys.some(function (key) {
           if (key.test && key.insecure) {
             apikey = key;
             return true;

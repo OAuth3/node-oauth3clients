@@ -18,8 +18,9 @@ function dbsetup(config) {
     }
   , { tablename: 'oauth_clients'
     , idname: 'id'
-    , indices: ['createdAt', 'updatedAt']
+    , indices: ['createdAt', 'updatedAt', 'accountId']
     , hasMany: ['apiKeys'] // TODO
+    , belongsTo: ['account']
     , schema: function () {
         return {
           test: true
@@ -97,8 +98,10 @@ module.exports.create = function (config) {
   return cstore.create({ standalone: true, store: new require('express-session/session/memory')() }).then(function (Kv) {
     return dbsetup(config).then(function (DB) {
       // TODO cluster.isMaster should init the signer
-      return require('./login-helper').create(config, DB).then(function (result) {
-        var LoginsCtrl = result.Logins;
+
+      var CodesCtrl = require('authcodes').create(DB.Codes);
+      var LoginsCtrl = require('../../authentication-microservice/lib/logins').create({}, CodesCtrl, DB);
+      return require('./login-helper').create(config, DB, LoginsCtrl).then(function (result) {
         var user = result;
 
         return Signer.create(DB.PrivateKey).init().then(function (signer) {

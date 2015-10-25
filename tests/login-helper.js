@@ -1,9 +1,6 @@
-module.exports.create = function (config, DB) {
+module.exports.create = function (config, DB, LoginsCtrl) {
   'use strict';
 
-  var ContactNodes = require('../../lib/contact-nodes').create(config, DB);
-  var CodesStore = require('authcodes').create(DB.Codes);
-  var LoginStore = require('../../authentication-microservice/lib/logins').create({}, CodesStore, DB);
   //var Logins = require('../../lib/lds-logins').createController(config, LoginStore, DB, ContactNodes);
   var getProofOfSecret = require('../../authentication-microservice/lib/pbkdf2-utils').getProofOfSecret;
   var sha256 = require('../../authentication-microservice/lib/pbkdf2-utils').sha256;
@@ -21,21 +18,30 @@ module.exports.create = function (config, DB) {
   // success because it's inherently recoverable
   salt = sha256(new Buffer(userId).toString('hex') + config.appId);
   return getProofOfSecret(salt, 'MY_SPECIAL_SECRET', kdfMeta.iter).then(function (proof) {
-    return LoginStore.create({
+    return LoginsCtrl.login({
       node: userId
     , type: nodeType
     , secret: proof.proof
-    , salt: proof.salt
-    , kdf: proof.kdf || 'pbkdf2'
-    , algo: proof.algo
-    , iter: proof.iter
-    }).then(function (/*login*/) {
-      return {
+    }).then(function () {
+      return proof;
+    }, function () {
+      return LoginsCtrl.create({
         node: userId
       , type: nodeType
       , secret: proof.proof
-      , Logins: LoginStore
-      };
+      , salt: proof.salt
+      , kdf: proof.kdf || 'pbkdf2'
+      , algo: proof.algo
+      , iter: proof.iter
+      }).then(function () {
+        return proof;
+      });
     });
+  }).then(function (proof) {
+    return {
+      node: userId
+    , type: nodeType
+    , secret: proof.proof
+    };
   });
 };
