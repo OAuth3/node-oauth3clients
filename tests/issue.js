@@ -10,6 +10,7 @@ function run(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
   var count = 0;
   var apikey = null;
   var parsedRequest;
+  var clientAndUser;
 
   function setup() {
     return PromiseA.resolve();
@@ -193,17 +194,18 @@ function run(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
     }
   , function passLoginWithClient() {
       // adds 'apiKey' and 'login'
-      return oauth3orize.getClientAndUser(parsedRequest).then(function (result) {
-        if (!parsedRequest.apiKey || !result.apiKey) {
+      return oauth3orize.getClientAndUser(parsedRequest).then(function (cu) {
+        clientAndUser = cu;
+        if (!clientAndUser.apiKey) {
           throw new Error("client was not retrieved");
         }
-        if (!parsedRequest.login || !result.login) {
+        if (!clientAndUser.login) {
           throw new Error("login was not retrieved");
         }
       });
     }
   , function passExchangePassword() {
-      return oauth3orize.exchangePasswordToken(parsedRequest).then(function (result) {
+      return oauth3orize.exchangePasswordToken(clientAndUser, parsedRequest).then(function (result) {
         if (!result.accessToken) {
           throw new Error("accessToken was not retrieved");
         }
