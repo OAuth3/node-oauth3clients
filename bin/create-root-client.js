@@ -1,7 +1,8 @@
 'use strict';
 
 //var PromiseA = require('bluebird').Promise;
-var config = require('../config.test.js');
+var config = require(process.argv[2] || '../config.test.js');
+var apiKeys = require(process.argv[2] || '../config.test.keys.js');
 
 require('../tests/setup-helper').create(config).then(function (stuff) {
   console.log('[Create Root OauthClient]');
@@ -18,7 +19,6 @@ require('../tests/setup-helper').create(config).then(function (stuff) {
       return oauthClients[0];
     }
 
-    throw new Error("has client but didn't find it");
     // TODO login as myself before creating root app
     return OauthClients.create(config, account, {
       name: "Daplie Connect"
@@ -39,10 +39,16 @@ require('../tests/setup-helper').create(config).then(function (stuff) {
     , live: true
     , repo: "https://github.com/OAuth3/oauth3.org-backend"
     , keywords: ["oauth3.org", "api", "root"]
-    }).then(function () {
+    , apiKeys: apiKeys
+    }, { forceIds: true }).then(function (oauthClient) {
       console.log('Created New');
+      return oauthClient;
     });
   }).then(function (client) {
+    if (!client.apiKeys.length) {
+      throw new Error('missing api keys');
+    }
+
     client.apiKeys.forEach(function (key) {
       var title = (key.test && 'Development' || 'Production');
       title += ' ' + (key.insecure && 'Browser' || 'Server');
