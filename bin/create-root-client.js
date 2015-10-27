@@ -2,7 +2,7 @@
 
 //var PromiseA = require('bluebird').Promise;
 var config = require(process.argv[2] || '../config.test.js');
-var apiKeys = require(process.argv[2] || '../config.test.keys.js');
+var apiKeys = require(process.argv[3] || '../config.test.keys.js');
 
 require('../tests/setup-helper').create(config).then(function (stuff) {
   console.log('[Create Root OauthClient]');
@@ -18,6 +18,8 @@ require('../tests/setup-helper').create(config).then(function (stuff) {
       console.log('Found Existing');
       return oauthClients[0];
     }
+
+    console.log('[apiKeys]', apiKeys);
 
     // TODO login as myself before creating root app
     return OauthClients.create(config, account, {
