@@ -33,6 +33,7 @@ module.exports.create = function (config, DB, LoginsCtrl) {
       , kdf: proof.kdf || 'pbkdf2'
       , algo: proof.algo
       , iter: proof.iter
+      , bits: proof.bits
       }).then(function () {
         return proof;
       });

@@ -197,6 +197,9 @@ function run(Kv, models, LoginsCtrl, signer, ClientsCtrl, user, oauth3orize) {
       return oauth3orize.getClientAndUser(parsedRequest).then(function (cu) {
         clientAndUser = cu;
         if (!clientAndUser.apiKey) {
+          throw new Error("key was not retrieved");
+        }
+        if (!clientAndUser.apiKey.oauthClient) {
           throw new Error("client was not retrieved");
         }
         if (!clientAndUser.login) {
