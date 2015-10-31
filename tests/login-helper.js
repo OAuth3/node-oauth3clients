@@ -23,6 +23,7 @@ module.exports.create = function (config, DB, LoginsCtrl) {
     , type: nodeType
     , secret: proof.proof
     }).then(function () {
+      console.log('[USER EXISTS]');
       return proof;
     }, function () {
       return LoginsCtrl.create({
@@ -34,7 +35,11 @@ module.exports.create = function (config, DB, LoginsCtrl) {
       , algo: proof.algo
       , iter: proof.iter
       , bits: proof.bits
+      , mfa: {
+          totp: '7ACNOTRGO3LWQ5LVRICDCGZC25EQCGOP' 
+        }
       }).then(function () {
+        console.log('[USER CREATED]');
         return proof;
       });
     });
