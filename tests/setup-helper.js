@@ -107,7 +107,9 @@ module.exports.create = function (config) {
         return Signer.create(DB.PrivateKey).init().then(function (signer) {
 
           var ClientsCtrl = OauthClients.createController({}, DB, signer);
-          var oauth3orize = Oauth3orize.create(config, DB.Tokens, ClientsCtrl, LoginsCtrl, signer);
+          var oauth3orize = Oauth3orize.create(config, DB.Tokens, ClientsCtrl, LoginsCtrl, signer, function (secret, val) {
+            return require('../../lib/common').weakCipher(val, secret);
+          });
           return {
             Kv: PromiseA.promisifyAll(Kv)
           , Db: DB
