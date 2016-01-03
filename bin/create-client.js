@@ -17,8 +17,8 @@ function genKeypair(experienceId) {
 
   return {
     id: crypto.createHash('sha256').update(experienceId + key.toPublicPem()).digest('hex')
-  , pub: key.toPublicPem()
-  , priv: key.toPrivatePem()
+  , pub: key.toPublicPem().toString()
+  , priv: key.toPrivatePem().toString()
   , secret: crypto.randomBytes(16).toString('hex')
   };
 }
@@ -32,8 +32,6 @@ if (!clientUrlId || !keyUrlId) {
 var getControllers = require('oauthcommon/example-oauthmodels').create(config).getControllers;
 
 getControllers(experienceId).then(function (Controllers) {
-  console.log('[Create OAuth3 Client]', experienceId);
-
   //var models = Controllers.models;
   var OauthClients = Controllers.models.OauthClients;
   var ApiKeys = Controllers.models.ApiKeys;
@@ -46,6 +44,7 @@ getControllers(experienceId).then(function (Controllers) {
 
     account = { id: 'groot', iAmGroot: true };
 
+    console.log('[Create User Profile]', experienceId);
     return Accounts.create(account.id, account).then(function () {
       return account;
     });
@@ -97,7 +96,7 @@ getControllers(experienceId).then(function (Controllers) {
         , keywords: ["oauth3.org", "api", "root"]
         , apiKeys: apiKeys
       */
-      return OauthClients.create(clientUrlId, {
+      client = {
         id: clientUrlId
       , url: clientUrlId
       , name: clientUrlId
@@ -105,14 +104,18 @@ getControllers(experienceId).then(function (Controllers) {
       , accountId: account.id
       , urls: ['https://' + clientUrlId]
       , cnames: [clientUrlId]
-      });
+      };
 
+      return OauthClients.create(client.id, client).then(function () {
+        return client;
+      });
     }).then(function (oauthClient) {
+      console.log(oauthClient.id, oauthClient);
       return ApiKeys.find({ oauthClientId: oauthClient.id, url: keyUrlId }).then(function (apiKeys) {
         var apiKey;
 
         if (!apiKeys.length) {
-          console.log('[Create API Key]');
+          console.log('[Create API Key], ' + oauthClient.id + ', ' + keyUrlId);
 
           apiKey = genKeypair(experienceId);
           apiKey.oauthClientId = oauthClient.id;

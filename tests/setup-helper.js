@@ -6,6 +6,7 @@ var cstore = require('cluster-store');
 var Signer = require('../lib/sign-token');
 var OauthClients = require('../lib/oauthclients');
 var Oauth3orize = require('../lib/oauth3orize');
+var scoper = require('app-scoped-ids');
 
 function dbsetup(config) {
   var sqlite3 = require('sqlite3-cluster');
@@ -108,7 +109,7 @@ module.exports.create = function (config) {
 
           var ClientsCtrl = OauthClients.createController({}, DB, signer);
           var oauth3orize = Oauth3orize.create(config, DB.Tokens, ClientsCtrl, LoginsCtrl, signer, function (secret, val) {
-            return require('../../lib/common').weakCipher(val, secret);
+            return scoper.scope(val, secret);
           });
           return {
             Kv: PromiseA.promisifyAll(Kv)

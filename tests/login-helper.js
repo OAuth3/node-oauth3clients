@@ -2,8 +2,8 @@ module.exports.create = function (config, DB, LoginsCtrl) {
   'use strict';
 
   //var Logins = require('../../lib/lds-logins').createController(config, LoginStore, DB, ContactNodes);
-  var getProofOfSecret = require('../../authentication-microservice/lib/pbkdf2-utils').getProofOfSecret;
-  var sha256 = require('../../authentication-microservice/lib/pbkdf2-utils').sha256;
+  var getProofOfSecret = require('authentication-microservice/lib/pbkdf2-utils').getProofOfSecret;
+  var sha256 = require('authentication-microservice/lib/pbkdf2-utils').sha256;
 
   var kdfMeta = {
     salt: null // assigned below
@@ -36,7 +36,7 @@ module.exports.create = function (config, DB, LoginsCtrl) {
       , iter: proof.iter
       , bits: proof.bits
       , mfa: {
-          totp: '7ACNOTRGO3LWQ5LVRICDCGZC25EQCGOP' 
+          totp: '7ACNOTRGO3LWQ5LVRICDCGZC25EQCGOP'
         }
       }).then(function () {
         console.log('[USER CREATED]');
