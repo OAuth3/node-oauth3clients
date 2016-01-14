@@ -1,27 +1,15 @@
 'use strict';
 
-var clientUrlId = process.argv[2];
-var keyUrlId = process.argv[3] || '';
-var experienceId = keyUrlId.replace(/\//g, ':');
 var config = {
   ipcKey: require('crypto').randomBytes(16).toString('hex')
 , sqlite3Sock: '/tmp/' + require('crypto').randomBytes(16).toString('hex') + '.sqlite3'
 };
 
-function genKeypair(experienceId) {
-  var crypto = require('crypto');
-  var ursa = require('ursa');
-  var bits = 1024;
-  var mod = 65537; // seems to be the most common, not sure why
-  var key = ursa.generatePrivateKey(bits, mod);
+var getOrCreateClient = require('../lib/create-client').getOrCreateClient;
 
-  return {
-    id: crypto.createHash('sha256').update(experienceId + key.toPublicPem()).digest('hex')
-  , pub: key.toPublicPem().toString()
-  , priv: key.toPrivatePem().toString()
-  , secret: crypto.randomBytes(16).toString('hex')
-  };
-}
+var clientUrlId = process.argv[2];
+var keyUrlId = process.argv[3] || '';
+var experienceId = keyUrlId.replace(/\//g, ':');
 
 if (!clientUrlId || !keyUrlId) {
   console.log("Usage:   node bin/create-client <client-url-id> <api-key-url>");
@@ -32,30 +20,27 @@ if (!clientUrlId || !keyUrlId) {
 var getControllers = require('oauthcommon/example-oauthmodels').create(config).getControllers;
 
 getControllers(experienceId).then(function (Controllers) {
-  //var models = Controllers.models;
-  var OauthClients = Controllers.models.OauthClients;
-  var ApiKeys = Controllers.models.ApiKeys;
-  var Accounts = Controllers.models.Accounts;
 
-  return Accounts.get('groot').then(function (account) {
-    if (account) {
-      return account;
-    }
+  getOrCreateClient(Controllers, {
+    debug: true
+  , clientUrlId: clientUrlId
+  , keyUrlId: keyUrlId
+  , experienceId: experienceId
+  }).then(function (client) {
+    client.apiKeys.forEach(function (key) {
+      var title = (key.test && 'Development' || 'Production');
 
-    account = { id: 'groot', iAmGroot: true };
-
-    console.log('[Create User Profile]', experienceId);
-    return Accounts.create(account.id, account).then(function () {
-      return account;
-    });
-  }).then(function (account) {
-
-    return OauthClients.get(clientUrlId).then(function (client) {
-
-      if (client) {
-        return client;
+      title += ' ' + (key.server && 'Server' || 'Browser');
+      title += ' Key:';
+      console.log(title);
+      //console.log('    ' + key.pub.replace(/\s+/g, ''));
+      console.log('    ' + key.pub.toString().replace(/\s+/g, ''));
+      if (key.secret && 'anonymous' !== key.secret) {
+        console.log('    ' + key.secret);
       }
-      console.log('[Create OAuth3 Client]');
+      console.log('');
+    });
+  });
 
       /*
           [ 'name'
@@ -96,54 +81,6 @@ getControllers(experienceId).then(function (Controllers) {
         , keywords: ["oauth3.org", "api", "root"]
         , apiKeys: apiKeys
       */
-      client = {
-        id: clientUrlId
-      , url: clientUrlId
-      , name: clientUrlId
-      , root: account.iAmGroot
-      , accountId: account.id
-      , urls: ['https://' + clientUrlId]
-      , cnames: [clientUrlId]
-      };
-
-      return OauthClients.create(client.id, client).then(function () {
-        return client;
-      });
-    }).then(function (oauthClient) {
-      console.log(oauthClient.id, oauthClient);
-      return ApiKeys.find({ oauthClientId: oauthClient.id, url: keyUrlId }).then(function (apiKeys) {
-        var apiKey;
-
-        if (!apiKeys.length) {
-          console.log('[Create API Key], ' + oauthClient.id + ', ' + keyUrlId);
-
-          apiKey = genKeypair(experienceId);
-          apiKey.oauthClientId = oauthClient.id;
-          apiKey.url = keyUrlId;
-
-          return ApiKeys.create(apiKey).then(function () {
-            return [apiKey];
-          });
-        }
-
-        return apiKeys;
-      });
-    }).then(function (apiKeys) {
-      apiKeys.forEach(function (key) {
-        var title = (key.test && 'Development' || 'Production');
-
-        title += ' ' + (key.server && 'Server' || 'Browser');
-        title += ' Key:';
-        console.log(title);
-        //console.log('    ' + key.pub.replace(/\s+/g, ''));
-        console.log('    ' + key.pub.toString().replace(/\s+/g, ''));
-        if (key.secret && 'anonymous' !== key.secret) {
-          console.log('    ' + key.secret);
-        }
-        console.log('');
-      });
-    });
-  });
 }, function (err) {
   console.error('[ERROR]');
   console.error(err);
