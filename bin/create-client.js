@@ -5,8 +5,6 @@ var config = {
 , sqlite3Sock: '/tmp/' + require('crypto').randomBytes(16).toString('hex') + '.sqlite3'
 };
 
-var getOrCreateClient = require('../lib/create-client').getOrCreateClient;
-
 var clientUrlId = process.argv[2];
 var keyUrlId = process.argv[3] || '';
 var experienceId = keyUrlId.replace(/\//g, ':');
@@ -21,7 +19,7 @@ var getControllers = require('oauthcommon/example-oauthmodels').create(config).g
 
 getControllers(experienceId).then(function (Controllers) {
 
-  getOrCreateClient(Controllers, {
+  require('../lib/oauthclients').createController({}, Controllers.models).getOrCreateClient({}, {
     debug: true
   , clientUrlId: clientUrlId
   , keyUrlId: keyUrlId
