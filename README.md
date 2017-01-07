@@ -1,11 +1,5 @@
 node-oauth3clients
-=============
+=====
 
-Models and Utils for OAuth3 Clients 
+Moved to https://git.daplie.com/OAuth3/node-oauth3clients
 
-LICENSE
-=======
-
-Dual-licensed MIT and Apache-2.0
-
-See LICENSE
